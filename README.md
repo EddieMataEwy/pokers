@@ -75,4 +75,5 @@ Differences with the original repo:
 This project is MIT Licensed
 
 Copyright (c) 2020 Kyle Murphy
+
 Copyright (c) 2024 Eduardo Mata Ewy
