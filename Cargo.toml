@@ -1,0 +1,12 @@
+[package]
+name = "pokers"
+version = "0.1.0"
+edition = "2021"
+authors = ["EddieMataEwy <eddiemataewy@gmail.com>"]
+repository = "https://github.com/EddieMataEwy/pokers"
+description = "Rust Poker Library"
+license = "MIT"
+keywords = ["poker", "holdem"]
+
+[dependencies]
+rand = { version = "0.7", features = ["small_rng"] }
