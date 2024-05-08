@@ -106,7 +106,7 @@ pub fn exact_equity<F: Fn(u8)>(
     sim.save_hand_weights();
 
     if board_mask.count_ones() > 2 {
-        sim.board_hit_analysis();
+        sim.set_ranks();
     }
 
     let (tx, rx) = channel();
@@ -130,6 +130,9 @@ pub fn exact_equity<F: Fn(u8)>(
     let mut results = results.into_inner().unwrap();
     results.get_equity();
     results.generate_final_data();
+    if board_mask.count_ones() > 2 {
+        results.generate_board_data();
+    }
     Ok(results)
 }
 
@@ -210,7 +213,7 @@ pub fn approx_equity<F: Fn(u8)>(
     sim.save_hand_weights();
 
     if board_mask.count_ones() > 2 {
-        sim.board_hit_analysis();
+        sim.set_ranks();
     }
 
     let (tx, rx) = channel();
@@ -236,6 +239,9 @@ pub fn approx_equity<F: Fn(u8)>(
     let mut results = results.into_inner().unwrap();
     results.get_equity();
     results.generate_final_data();
+    if board_mask.count_ones() > 2 {
+        results.generate_board_data();
+    }
     Ok(results)
 }
 
@@ -251,17 +257,9 @@ pub struct SimulationResults {
     pub batch_sum2: f64,
     pub batch_count: f64,
     pub stdev: f64,
-    pub hand_results: Vec<HandResults>,
-    pub hand_board_hit: Vec<u8>,
-    pub hand_winrate: Vec<f64>,
-    pub hand_tierate: Vec<f64>,
-    pub combo_equities: Vec<f64>,
-    pub combo_winrate: Vec<f64>,
-    pub combo_tierate: Vec<f64>,
-    pub valid_hands: Vec<bool>,
-    pub valid_combos: Vec<bool>,
-    pub hand_weights: Vec<u8>,
-    pub combo_weights: Vec<f64>,
+    pub hand_results: Vec<UnitResults>,
+    pub combo_results: Vec<UnitResults>,
+    pub board_results: Vec<UnitResults>,
 }
 
 impl SimulationResults {
@@ -276,17 +274,9 @@ impl SimulationResults {
             batch_sum: 0f64,
             batch_sum2: 0f64,
             stdev: 0f64,
-            hand_results: vec![HandResults::init(); 1326*n_players],
-            hand_board_hit: vec![0; 1326*n_players],
-            hand_winrate: vec![0.0; 1326*n_players],
-            hand_tierate: vec![0.0; 1326*n_players],
-            combo_equities: Vec::with_capacity(169*n_players),
-            combo_winrate: Vec::with_capacity(169*n_players),
-            combo_tierate: Vec::with_capacity(169*n_players),
-            valid_hands: vec![false; 1326*n_players],
-            valid_combos: Vec::with_capacity(169*n_players),
-            hand_weights: vec![0; 1326*n_players],
-            combo_weights: Vec::with_capacity(169*n_players),
+            hand_results: vec![UnitResults::default(); 1326*n_players],
+            combo_results: Vec::with_capacity(169*n_players),
+            board_results: vec![UnitResults::default(); 9*n_players],
         }
     }
     fn get_equity(&mut self) {
@@ -308,10 +298,10 @@ impl SimulationResults {
             let mut j: usize = 0;
             while j < 1326 {
                 let mut counter = 0;
-                let mut equity = 0.0;
-                let mut weight = 0.0;
+                let mut weight = 0;
                 let mut wins = 0;
                 let mut ties = 0;
+                let mut corrected_ties = 0.;
                 let mut total = 0;
                 let batch_size = match j {
                     j if j < 78 => 6,
@@ -320,37 +310,63 @@ impl SimulationResults {
                 };
                 for k in 0..batch_size {
                     let hand_index = i*1326+j+k;
-                    if self.valid_hands[hand_index] {
-                        let hand_weight = self.hand_weights[hand_index];
-                        self.hand_winrate[hand_index] = self.hand_results[hand_index].hand_wins as f64 / self.hand_results[hand_index].hand_total as f64;
-                        self.hand_tierate[hand_index] = self.hand_results[hand_index].hand_ties as f64 / self.hand_results[hand_index].hand_total as f64;
+                    let hand = &mut self.hand_results[hand_index];
+                    if hand.valid {
+                        hand.winrate = hand.wins as f64 / hand.total as f64;
+                        hand.tierate = hand.ties as f64 / hand.total as f64;
                         counter += 1;
-                        equity += self.hand_results[hand_index].hand_equity*(hand_weight as f64 / 100.0);
-                        weight += hand_weight as f64 / 100.0;
-                        wins += self.hand_results[hand_index].hand_wins;
-                        ties += self.hand_results[hand_index].hand_ties;
-                        total += self.hand_results[hand_index].hand_total;
+                        weight += hand.weight as usize;
+                        wins += hand.wins;
+                        ties += hand.ties;
+                        corrected_ties += hand.corrected_ties;
+                        total += hand.total;
                     }
                 }
                 if counter > 0 {
-                    self.valid_combos.push(true);
-                    self.combo_equities.push(equity/weight);
-                    self.combo_weights.push(weight/(batch_size as f64 *100.0));
-                    self.combo_winrate.push(wins as f64 / total as f64);
-                    self.combo_tierate.push(ties as f64 / total as f64);
+                    let combo = UnitResults {
+                        wins,
+                        ties,
+                        total,
+                        corrected_ties,
+                        equity: (wins as f64 + corrected_ties) / total as f64,
+                        winrate: wins as f64 / total as f64,
+                        tierate: ties as f64 / total as f64,
+                        weight: (weight/batch_size) as u32,
+                        rank: u8::MAX,
+                        valid: true
+                    };
+                    self.combo_results.push(combo);
                 } else {
-                    self.valid_combos.push(false);
-                    self.combo_equities.push(0.0);
-                    self.combo_weights.push(0.0);
-                    self.combo_winrate.push(0.0);
-                    self.combo_tierate.push(0.0);
+                    let combo = UnitResults::default();
+                    self.combo_results.push(combo);
                 }
                 j += batch_size;
             }
         }
-        self.valid_combos.shrink_to_fit();
-        self.combo_equities.shrink_to_fit();
-        self.combo_weights.shrink_to_fit();
+        self.combo_results.shrink_to_fit();
+    }
+    fn generate_board_data(&mut self) {
+        let n_players = self.equities.len();
+        for i in 0..n_players {
+            for j in 0..1326 {
+                let hand = &self.hand_results[i*1326+j];
+                if hand.valid {
+                    let rank = hand.rank;
+                    let rank_data = &mut self.board_results[i*9+rank as usize];
+                    rank_data.wins += hand.wins;
+                    rank_data.ties += hand.ties;
+                    rank_data.total += hand.total;
+                    rank_data.corrected_ties += hand.corrected_ties;
+                    rank_data.weight += hand.weight;
+                }
+            }
+            for j in 0..9 {
+                let rank_data = &mut self.board_results[i*9+j];
+                rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
+                rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
+                rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
+            }
+        }
     }
 }
 
@@ -390,41 +406,62 @@ impl PartialOrd for HandWithIndex {
     }
 }
 
+/// This type can represent the results
+/// of a single hand or a single combo.
 #[derive(Debug, Clone)]
-pub struct HandResults {
-    pub hand_wins: u64,
-    pub hand_ties: u64,
-    pub hand_total: u64,
-    pub hand_corrected_ties: f64,
-    pub hand_equity: f64,
+pub struct UnitResults {
+    pub wins: u64,
+    pub ties: u64,
+    pub total: u64,
+    pub corrected_ties: f64,
+    pub equity: f64,
+    pub winrate: f64,
+    pub tierate: f64,
+    pub weight: u32,
+    pub rank: u8,
+    pub valid: bool,
 }
 
-impl HandResults {
-    fn init() -> HandResults {
-        HandResults { hand_wins: 0, hand_ties: 0, hand_total: 0, hand_corrected_ties: 0., hand_equity: 0. }
+impl Default for UnitResults {
+    fn default() -> Self {
+        UnitResults { 
+            wins: 0, 
+            ties: 0, 
+            total: 0, 
+            corrected_ties: 0., 
+            equity: 0., 
+            winrate: 0., 
+            tierate: 0., 
+            weight: 0, 
+            rank: u8::MAX, 
+            valid: false
+        }
     }
+}
+
+impl UnitResults {
     #[inline(always)]
     fn update_total(&mut self, weight: u64) {
-        self.hand_total += weight;
+        self.total += weight;
     }
     #[inline(always)]
     fn update_wins(&mut self, weight: u64) {
-        self.hand_wins += weight;
+        self.wins += weight;
     }
     #[inline(always)]
     fn update_ties(&mut self, weight: u64, counter: usize) {
-        self.hand_ties += weight;
-        self.hand_corrected_ties += weight as f64 / counter as f64;
+        self.ties += weight;
+        self.corrected_ties += weight as f64 / counter as f64;
     }
 }
 
-impl AddAssign for HandResults {
+impl AddAssign for UnitResults {
     fn add_assign(&mut self, other: Self) {
-        self.hand_wins += other.hand_wins;
-        self.hand_ties += other.hand_ties;
-        self.hand_total += other.hand_total;
-        self.hand_corrected_ties += other.hand_corrected_ties;
-        self.hand_equity = (self.hand_wins as f64+self.hand_corrected_ties)/self.hand_total as f64;
+        self.wins += other.wins;
+        self.ties += other.ties;
+        self.total += other.total;
+        self.corrected_ties += other.corrected_ties;
+        self.equity = (self.wins as f64+self.corrected_ties)/self.total as f64;
     }
 }
 
@@ -507,7 +544,7 @@ impl Simulator {
         let mut enum_pos = 0u64;
         let mut enum_end = 0u64;
         let mut stats = SimulationResultsBatch::init(self.n_players);
-        let mut hand_stats = vec![HandResults::init(); self.n_players*1326];
+        let mut hand_stats = vec![UnitResults::default(); self.n_players*1326];
         let fast_dividers: Vec<DividerU64> = self
             .combined_ranges
             .iter()
@@ -569,7 +606,7 @@ impl Simulator {
             if stats.eval_count >= 10000  {
                 self.update_results(&tx, stats, hand_stats, false);
                 stats = SimulationResultsBatch::init(self.n_players);
-                hand_stats = vec![HandResults::init(); self.n_players*1326];
+                hand_stats = vec![UnitResults::default(); self.n_players*1326];
                 if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
                     break;
                 }
@@ -587,7 +624,7 @@ impl Simulator {
         board: &Hand,
         used_cards_mask: u64,
         stats: &mut SimulationResultsBatch,
-        hand_stats: &mut Vec<HandResults>,
+        hand_stats: &mut Vec<UnitResults>,
     ) {
         let mut hands = [Hand::default(); MAX_PLAYERS];
         let mut lookup = [0; 6];
@@ -648,7 +685,7 @@ impl Simulator {
         &self,
         hands: &[Hand],
         stats: &mut SimulationResultsBatch,
-        hand_stats: &mut Vec<HandResults>,
+        hand_stats: &mut Vec<UnitResults>,
         lookup: &[usize;6],
         board: &Hand,
         deck: &mut [u8],
@@ -810,7 +847,7 @@ impl Simulator {
 
     fn sim_random_walk_monte_carlo<R: Rng>(&self, rng: &mut R, tx: Sender<u8>) {
         let mut batch = SimulationResultsBatch::init(self.n_players);
-        let mut hand_stats = vec![HandResults::init(); self.n_players*1326];
+        let mut hand_stats = vec![UnitResults::default(); self.n_players*1326];
         let card_dist: Uniform<u8> = Uniform::from(0..CARD_COUNT);
         let combo_dists: Vec<Uniform<usize>> = (0..self.combined_ranges.len())
             .into_iter()
@@ -850,7 +887,7 @@ impl Simulator {
 
                 if (batch.eval_count & 0xfff) == 0 {
                     self.update_results(&tx, batch, hand_stats, false);
-                    hand_stats = vec![HandResults::init(); 1326*self.n_players];
+                    hand_stats = vec![UnitResults::default(); 1326*self.n_players];
                     batch = SimulationResultsBatch::init(self.n_players);
                     if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -933,7 +970,7 @@ impl Simulator {
         false
     }
 
-    fn update_results(&self, tx: &Sender<u8>, batch: SimulationResultsBatch, hand_batch: Vec<HandResults>, finished: bool) {
+    fn update_results(&self, tx: &Sender<u8>, batch: SimulationResultsBatch, hand_batch: Vec<UnitResults>, finished: bool) {
         // get lock
         let mut results = self.results.write().unwrap();
         let mut batch_hands = 0u64;
@@ -989,7 +1026,7 @@ impl Simulator {
         }
     }
 
-    fn board_hit_analysis(&self) {
+    fn set_ranks(&self) {
         let mut results = self.results.write().unwrap();
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
             for hand in &hand_range.hands{
@@ -1001,7 +1038,7 @@ impl Simulator {
                 if category > 0 {
                     category -= 1;
                 }
-                results.hand_board_hit[1326*i+get_card_index(hand.0, hand.1)] = category;
+                results.hand_results[1326*i+get_card_index(hand.0, hand.1)].rank = category;
             }
         }
     }
@@ -1010,8 +1047,10 @@ impl Simulator {
         let mut results = self.results.write().unwrap();
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
             for hand in &hand_range.hands{
-                results.hand_weights[1326*i+get_card_index(hand.0, hand.1)] = hand.2;
-                results.valid_hands[1326*i+get_card_index(hand.0, hand.1)] = true;
+                let hand_index = 1326*i+get_card_index(hand.0, hand.1);
+                let hand_data = &mut results.hand_results[hand_index];
+                hand_data.weight = hand.2 as u32;
+                hand_data.valid = true;
             }
         }
     }
@@ -1024,7 +1063,7 @@ impl Simulator {
         board: &Hand,
         lookup: &[usize; 6],
         results: &mut SimulationResultsBatch,
-        hand_results: &mut Vec<HandResults>,
+        hand_results: &mut Vec<UnitResults>,
         flush_possible: bool,
     ) {
         // evaulate hands

@@ -53,5 +53,5 @@ pub mod hash_offsets;
 pub mod map;
 
 pub use hand_range::{HandRange, get_card_mask};
-pub use equity_calculator::{exact_equity, approx_equity, SimulationResults, HandResults, SimulatorError};
+pub use equity_calculator::{exact_equity, approx_equity, SimulationResults, UnitResults, SimulatorError};
 pub use hand_evaluator::*;
