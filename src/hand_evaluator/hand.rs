@@ -20,6 +20,64 @@ pub fn get_card_index(card1: u8, card2: u8) -> usize {
     unsafe {*CARD_MAP.get_unchecked(index) as usize}
 }
 
+/// This function is very experimental.
+/// Usage not recommended.
+/// 1 - Straight Draw
+/// 2 - Gutshot Draw
+/// 4 - Double Gutshot Draw
+/// 8 - Nut Straight Draw
+/// 16 - Backdoor Straight Draw
+/// 32 - Flush Draw
+/// 64 - Nut Flush Draw
+/// 128 - Backdoor Flush Draw
+pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
+    let mut draw: u8 = 0;
+    let hand = hole_cards.clone() + board.clone();
+    let rank_mask = hand.get_rank_mask();
+    if rank < 4 {
+        let mut oesd_mask: u16 = 15;
+        let mut gsd_mask: u16 = 31;
+        let mut dgsd_mask: u16 = 127;
+        for _ in 0..10 {
+            let masked_hand = rank_mask & oesd_mask;
+            if masked_hand == oesd_mask {
+                draw |= 1; // Open Ended Straight Draw
+            } else {
+                let oesd_mask_1 = oesd_mask << 1;
+                let oesd_mask_2 = oesd_mask << 2;
+                let masked_hand = rank_mask & gsd_mask;
+                if masked_hand.count_ones() == 4 {
+                    // Check for false positives
+                    if (rank_mask & (oesd_mask_1)) != masked_hand {
+                        draw |= 2; // Gutshot Straight Draw
+                    }
+                }
+                let masked_hand = rank_mask & dgsd_mask;
+                if masked_hand.count_ones() == 5 {
+                    // Check for false positives
+                    if ((rank_mask & (oesd_mask_1)) != oesd_mask_1) && ((rank_mask & (oesd_mask_2)) != oesd_mask_2) {
+                        draw |= 4; // Double Gutshot Straight Draw
+                    }
+                }
+            }
+            oesd_mask <<= 1;
+            gsd_mask <<= 1;
+            dgsd_mask <<= 1;
+        }
+    }
+    if rank < 5 {
+        for i in 0..4 {
+            let suit_count = hand.suit_count(i);
+            if suit_count  == 4 {
+                draw |= 32; // Flush Draw
+            } else if suit_count == 3 {
+                draw |= 128; // Backdoor Flush Draw
+            }
+        }
+    }
+    draw
+}
+
 /// 64 bit representation of poker hand for use in evaluator
 ///
 /// Bits 0-31: key to non flush lookup table
@@ -65,6 +123,15 @@ impl Hand {
     #[inline(always)]
     pub const fn get_mask(self) -> u64 {
         self.mask
+    }
+    /// Returns 16 bit rank mask, ignoring suits
+    pub fn get_rank_mask(&self) -> u16 {
+        let hand_mask = self.get_mask();
+        let mut rank_mask = 0u64;
+        for i in 0..4 {
+            rank_mask |= (hand_mask >> 16 * (3 - i)) & 0xFFFF;
+        }
+        rank_mask as u16
     }
     /// get rank key of card for lookup table
     #[inline(always)]
