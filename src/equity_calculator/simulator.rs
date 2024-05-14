@@ -312,14 +312,18 @@ impl SimulationResults {
                     let hand_index = i*1326+j+k;
                     let hand = &mut self.hand_results[hand_index];
                     if hand.valid {
-                        hand.winrate = hand.wins as f64 / hand.total as f64;
-                        hand.tierate = hand.ties as f64 / hand.total as f64;
-                        counter += 1;
-                        weight += hand.weight as usize;
-                        wins += hand.wins;
-                        ties += hand.ties;
-                        corrected_ties += hand.corrected_ties;
-                        total += hand.total;
+                        if hand.total > 0 {
+                            hand.winrate = hand.wins as f64 / hand.total as f64;
+                            hand.tierate = hand.ties as f64 / hand.total as f64;
+                            counter += 1;
+                            weight += hand.weight as usize;
+                            wins += hand.wins;
+                            ties += hand.ties;
+                            corrected_ties += hand.corrected_ties;
+                            total += hand.total;
+                        } else {
+                            hand.equity = 0.0;
+                        }
                     }
                 }
                 if counter > 0 {
@@ -362,9 +366,11 @@ impl SimulationResults {
             }
             for j in 0..9 {
                 let rank_data = &mut self.board_results[i*9+j];
-                rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
-                rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
-                rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
+                if rank_data.total > 0 {
+                    rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
+                    rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
+                    rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
+                }
             }
         }
     }
