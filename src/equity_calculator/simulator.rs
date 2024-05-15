@@ -4,6 +4,7 @@ use std::thread;
 use std::sync::atomic::AtomicBool;
 
 use crate::fastdivide::DividerU64;
+use crate::get_draw;
 use std::cmp::Ordering;
 
 use std::result::Result;
@@ -260,6 +261,7 @@ pub struct SimulationResults {
     pub hand_results: Vec<UnitResults>,
     pub combo_results: Vec<UnitResults>,
     pub board_results: Vec<UnitResults>,
+    pub board_draws: Vec<UnitResults>,
 }
 
 impl SimulationResults {
@@ -277,6 +279,7 @@ impl SimulationResults {
             hand_results: vec![UnitResults::default(); 1326*n_players],
             combo_results: Vec::with_capacity(169*n_players),
             board_results: vec![UnitResults::default(); 9*n_players],
+            board_draws: vec![UnitResults::default(); 10*n_players], 
         }
     }
     fn get_equity(&mut self) {
@@ -337,6 +340,7 @@ impl SimulationResults {
                         tierate: ties as f64 / total as f64,
                         weight: (weight/batch_size) as u32,
                         rank: u8::MAX,
+                        draw: 0,
                         valid: true
                     };
                     self.combo_results.push(combo);
@@ -362,15 +366,58 @@ impl SimulationResults {
                     rank_data.total += hand.total;
                     rank_data.corrected_ties += hand.corrected_ties;
                     rank_data.weight += hand.weight;
+                    let draw = hand.draw;
+                    let mut mask = 1;
+                    for k in 0..7 {
+                        let masked_draw = draw & mask; 
+                        if masked_draw != 0 {
+                            let draw_data = &mut self.board_draws[i*9+k];
+                            draw_data.wins += hand.wins;
+                            draw_data.ties += hand.ties;
+                            draw_data.total += hand.total;
+                            draw_data.corrected_ties += hand.corrected_ties;
+                            draw_data.weight += hand.weight;
+                        }
+                        mask <<=1;
+                    }
+                    let masked_draw = draw & mask;
+                    if masked_draw != 0 {
+                        let mut draw_rank = usize::MAX;
+                        let check_1 = (draw & (mask >> 2)) != 0;
+                        let check_2 = (draw & (mask >> 1)) != 0;
+                        if check_1 {
+                            draw_rank = 7;
+                        }
+                        if check_2 {
+                            draw_rank = 8;
+                        }
+                        if !check_1 && !check_2 {
+                            draw_rank = 9;
+                        }
+                        if draw_rank != usize::MAX {
+                            let draw_data = &mut self.board_draws[i*9+draw_rank];
+                            draw_data.wins += hand.wins;
+                            draw_data.ties += hand.ties;
+                            draw_data.total += hand.total;
+                            draw_data.corrected_ties += hand.corrected_ties;
+                            draw_data.weight += hand.weight;
+                        }
+                    }
                 }
             }
-            for j in 0..9 {
-                let rank_data = &mut self.board_results[i*9+j];
-                if rank_data.total > 0 {
-                    rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
-                    rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
-                    rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
-                }
+        }
+        for rank_data in self.board_results.iter_mut() {
+            if rank_data.total > 0 {
+                rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
+                rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
+                rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
+            }
+        }
+        for draw_data in self.board_draws.iter_mut() {
+            if draw_data.total > 0 {
+                draw_data.equity = (draw_data.wins as f64 + draw_data.corrected_ties)/draw_data.total as f64;
+                draw_data.winrate = draw_data.wins as f64/draw_data.total as f64;
+                draw_data.tierate = draw_data.corrected_ties/draw_data.total as f64;
             }
         }
     }
@@ -425,6 +472,7 @@ pub struct UnitResults {
     pub tierate: f64,
     pub weight: u32,
     pub rank: u8,
+    pub draw: u8,
     pub valid: bool,
 }
 
@@ -440,6 +488,7 @@ impl Default for UnitResults {
             tierate: 0., 
             weight: 0, 
             rank: u8::MAX, 
+            draw: 0,
             valid: false
         }
     }
@@ -1036,15 +1085,17 @@ impl Simulator {
         let mut results = self.results.write().unwrap();
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
             for hand in &hand_range.hands{
-                let mut h = Hand::from_bit_mask(self.board_mask);
+                let board = Hand::from_bit_mask(self.board_mask);
                 let holding = Hand::from_hole_cards(hand.0, hand.1);
-                h += holding;
+                let h = board + holding;
                 let rank = h.evaluate();
                 let mut category: u8 = (rank/HAND_CATEGORY_OFFSET) as u8;
                 if category > 0 {
                     category -= 1;
                 }
                 results.hand_results[1326*i+get_card_index(hand.0, hand.1)].rank = category;
+                let draw = get_draw(holding, board, category);
+                results.hand_results[1326*i+get_card_index(hand.0, hand.1)].draw = draw;
             }
         }
     }

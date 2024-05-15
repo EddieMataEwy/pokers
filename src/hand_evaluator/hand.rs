@@ -25,44 +25,76 @@ pub fn get_card_index(card1: u8, card2: u8) -> usize {
 /// 1 - Straight Draw
 /// 2 - Gutshot Draw
 /// 4 - Double Gutshot Draw
-/// 8 - Nut Straight Draw
-/// 16 - Backdoor Straight Draw
+/// 8 - Backdoor Straight Draw
+/// 16 - Nut Straight 
 /// 32 - Flush Draw
-/// 64 - Nut Flush Draw
-/// 128 - Backdoor Flush Draw
+/// 64 - Backdoor Flush Draw
+/// 128 - Nut (Backdoor) Flush (Draw)
 pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
     let mut draw: u8 = 0;
     let hand = hole_cards.clone() + board.clone();
     let rank_mask = hand.get_rank_mask();
     if rank < 4 {
-        let mut oesd_mask: u16 = 15;
-        let mut gsd_mask: u16 = 31;
-        let mut dgsd_mask: u16 = 127;
-        for _ in 0..10 {
+        let mut oesd_mask: u16 = 0b1111;
+        let mut bdsd_mask: u16 = 0b11111;
+        let mut gsd_mask_1: u16 = 0b10111;
+        let mut gsd_mask_2: u16 = 0b11011;
+        let mut gsd_mask_3: u16 = 0b11101;
+        let mut dgsd_mask_1: u16 = 0b1011101;
+        let mut dgsd_mask_2: u16 = 0b11011011;
+        for i in 0..10 {
             let masked_hand = rank_mask & oesd_mask;
             if masked_hand == oesd_mask {
-                draw |= 1; // Open Ended Straight Draw
-            } else {
-                let oesd_mask_1 = oesd_mask << 1;
-                let oesd_mask_2 = oesd_mask << 2;
-                let masked_hand = rank_mask & gsd_mask;
-                if masked_hand.count_ones() == 4 {
-                    // Check for false positives
-                    if (rank_mask & (oesd_mask_1)) != masked_hand {
-                        draw |= 2; // Gutshot Straight Draw
-                    }
-                }
-                let masked_hand = rank_mask & dgsd_mask;
-                if masked_hand.count_ones() == 5 {
-                    // Check for false positives
-                    if ((rank_mask & (oesd_mask_1)) != oesd_mask_1) && ((rank_mask & (oesd_mask_2)) != oesd_mask_2) {
-                        draw |= 4; // Double Gutshot Straight Draw
-                    }
+                if i == 0 || i == 9 {
+                    draw |= 2; // Gutshot Stratight Draw
+                } else {
+                    draw |= 1; // Open Ended Straight Draw
                 }
             }
+            let masked_hand = rank_mask & bdsd_mask;
+            if masked_hand.count_ones() == 3 {
+                // Check for false positives
+                let check_1 = (rank_mask & (bdsd_mask << 1)).count_ones() > 3;
+                let check_2 = (rank_mask & (bdsd_mask >> 1)).count_ones() > 3;
+                if !check_1 && !check_2 {
+                    draw |= 8; // Backdoor Stratight Draw
+                }
+            }
+            let result_1 = (rank_mask & gsd_mask_1) == gsd_mask_1;
+            let result_2 = (rank_mask & gsd_mask_2) == gsd_mask_2;
+            let result_3 = (rank_mask & gsd_mask_3) == gsd_mask_3;
+            if result_1 || result_2 || result_3 {
+                draw |= 2; // Gutshot Straight Draw
+            }
+            let result_1 = (rank_mask & dgsd_mask_1) == dgsd_mask_1;
+            let result_2 = (rank_mask & dgsd_mask_2) == dgsd_mask_2;
+            if result_1 || result_2 {
+                draw |= 4; // Gutshot Straight Draw
+            }
             oesd_mask <<= 1;
-            gsd_mask <<= 1;
-            dgsd_mask <<= 1;
+            bdsd_mask <<= 1;
+            gsd_mask_1 <<= 1;
+            gsd_mask_2 <<= 1;
+            gsd_mask_3 <<= 1;
+            dgsd_mask_1 <<= 1;
+            dgsd_mask_2 <<= 1;
+        }
+    }
+    if rank == 4 {
+        let mut mask: u16 = 0b1111100000000;
+        let board_mask = board.get_rank_mask();
+        for _ in 0..10 {
+            let masked_board = board_mask & mask;
+            if masked_board.count_ones() >= 3 {
+                if (rank_mask & mask) == mask {
+                    draw |= 16; // Nut Straight
+                }
+                // If board has 3 cards in the mask
+                // but the hand is not a straight,
+                // then it's not the nut straught.
+                break;
+            }
+            mask >>= 1;
         }
     }
     if rank < 5 {
@@ -71,7 +103,41 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
             if suit_count  == 4 {
                 draw |= 32; // Flush Draw
             } else if suit_count == 3 {
-                draw |= 128; // Backdoor Flush Draw
+                draw |= 64; // Backdoor Flush Draw
+            }
+            if suit_count >= 3 {
+                let mask: u16 = 0b1111100000000;
+                // Only the top 5 cards matter for the Nut Flush
+                let board_mask = board.get_suit_mask(i) & mask;
+                let hole_mask = hole_cards.get_suit_mask(i) & mask;
+                // Which of the top 5 not in board?
+                let xor_mask = (board_mask ^ mask) & mask;
+                if xor_mask.leading_zeros() == hole_mask.leading_zeros() {
+                    draw |= 128; // The player is holding the Nut Flush Draw 
+                }
+            }
+        }
+    }
+    if rank == 5 {
+        let mut suit = u8::MAX;
+        for i in 0..4 {
+            let suit_count = hand.suit_count(i);
+            if suit_count >= 5 {
+                suit = i;
+                break; 
+            }
+        }
+        let mask: u16 = 0b1111100000000;
+        // Only the top 5 cards matter for the Nut Flush
+        let board_mask = board.get_suit_mask(suit) & mask;
+        let hole_mask = hole_cards.get_suit_mask(suit) & mask;
+        // Which of the top 5 not in board?
+        let xor_mask = (board_mask ^ mask) & mask;
+        if xor_mask == 0 {
+            draw |= 128; // Board is Nut Flush
+        } else {
+            if xor_mask.leading_zeros() == hole_mask.leading_zeros() {
+                draw |= 128; // The player is holding the Nut Flush 
             }
         }
     }
@@ -123,6 +189,13 @@ impl Hand {
     #[inline(always)]
     pub const fn get_mask(self) -> u64 {
         self.mask
+    }
+    /// Returns 16 bit rank mask, ignoring suits
+    pub fn get_suit_mask(&self, suit: u8) -> u16 {
+        let hand_mask = self.get_mask();
+        let mut rank_mask = 0u64;
+        rank_mask |= (hand_mask >> 16 * (3 - suit)) & 0xFFFF;
+        rank_mask as u16
     }
     /// Returns 16 bit rank mask, ignoring suits
     pub fn get_rank_mask(&self) -> u16 {
