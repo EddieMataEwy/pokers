@@ -246,7 +246,7 @@ pub fn approx_equity<F: Fn(u8)>(
     Ok(results)
 }
 
-/// stores total results of the simulation
+/// Stores total results of the simulation
 #[derive(Debug, Clone)]
 pub struct SimulationResults {
     pub wins: Vec<u64>,
@@ -258,9 +258,21 @@ pub struct SimulationResults {
     pub batch_sum2: f64,
     pub batch_count: f64,
     pub stdev: f64,
+    /// All individual hands. Order is defined by `get_card_index()`
+    /// [0-77] is pairs.
+    /// [78-391] is suited hands.
+    /// [392-1325] is offsuited hands.
     pub hand_results: Vec<UnitResults>,
+    /// All preflob combos. Order derived by batching the hands.
+    /// [0-12] is pairs.
+    /// [13-91] is suited combos.
+    /// [92-168] is offsuited combos.
     pub combo_results: Vec<UnitResults>,
+    /// Result data for every rank.
+    /// Ranks 0 -> 8 are High Card -> Straight Flush    
     pub board_results: Vec<UnitResults>,
+    /// Result data for every draw and for nut straight and nut draw.
+    /// Order is defined in `get_draw()` and `generate_board_data()`
     pub board_draws: Vec<UnitResults>,
 }
 
@@ -383,16 +395,16 @@ impl SimulationResults {
                     let masked_draw = draw & mask;
                     if masked_draw != 0 {
                         let mut draw_rank = usize::MAX;
-                        let check_1 = (draw & (mask >> 2)) != 0;
-                        let check_2 = (draw & (mask >> 1)) != 0;
+                        let check_1 = (draw & (mask >> 1)) != 0;
+                        let check_2 = (draw & (mask >> 2)) != 0;
                         if check_1 {
-                            draw_rank = 7;
+                            draw_rank = 7; // Backdoor Nut Flush Draw
                         }
                         if check_2 {
-                            draw_rank = 8;
+                            draw_rank = 8; // Nut Flush Draw
                         }
                         if !check_1 && !check_2 {
-                            draw_rank = 9;
+                            draw_rank = 9; // Nut Flush
                         }
                         if draw_rank != usize::MAX {
                             let draw_data = &mut self.board_draws[i*9+draw_rank];
