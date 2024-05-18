@@ -34,6 +34,7 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
     let mut draw: u8 = 0;
     let hand = hole_cards.clone() + board.clone();
     let rank_mask = hand.get_rank_mask();
+    let get_backdoors = board.get_mask().count_ones() < 4;
     if rank < 4 {
         let mut oesd_mask: u16 = 0b1111;
         let mut bdsd_mask: u16 = 0b11111;
@@ -51,13 +52,15 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
                     draw |= 1; // Open Ended Straight Draw
                 }
             }
-            let masked_hand = rank_mask & bdsd_mask;
-            if masked_hand.count_ones() == 3 {
-                // Check for false positives
-                let check_1 = (rank_mask & (bdsd_mask << 1)).count_ones() > 3;
-                let check_2 = (rank_mask & (bdsd_mask >> 1)).count_ones() > 3;
-                if !check_1 && !check_2 {
-                    draw |= 8; // Backdoor Stratight Draw
+            if get_backdoors {
+                let masked_hand = rank_mask & bdsd_mask;
+                if masked_hand.count_ones() == 3 {
+                    // Check for false positives
+                    let check_1 = (rank_mask & (bdsd_mask << 1)).count_ones() > 3;
+                    let check_2 = (rank_mask & (bdsd_mask >> 1)).count_ones() > 3;
+                    if !check_1 && !check_2 {
+                        draw |= 8; // Backdoor Stratight Draw
+                    }
                 }
             }
             let result_1 = (rank_mask & gsd_mask_1) == gsd_mask_1;
@@ -103,7 +106,9 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
             if suit_count  == 4 {
                 draw |= 32; // Flush Draw
             } else if suit_count == 3 {
-                draw |= 64; // Backdoor Flush Draw
+                if get_backdoors {
+                    draw |= 64; // Backdoor Flush Draw
+                }
             }
             if suit_count >= 3 {
                 let mask: u16 = 0b1111100000000;

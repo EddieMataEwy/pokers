@@ -314,10 +314,10 @@ impl SimulationResults {
             while j < 1326 {
                 let mut counter = 0;
                 let mut weight = 0;
-                let mut wins = 0;
-                let mut ties = 0;
+                let mut wins: u128  = 0;
+                let mut ties: u128  = 0;
                 let mut corrected_ties = 0.;
-                let mut total = 0;
+                let mut total: u128  = 0;
                 let batch_size = match j {
                     j if j < 78 => 6,
                     j if j < 390 => 4,
@@ -331,26 +331,34 @@ impl SimulationResults {
                             hand.winrate = hand.wins as f64 / hand.total as f64;
                             hand.tierate = hand.ties as f64 / hand.total as f64;
                             counter += 1;
-                            weight += hand.weight as usize;
-                            wins += hand.wins;
-                            ties += hand.ties;
+                            weight += hand.weight;
+                            wins += hand.wins as u128;
+                            ties += hand.ties as u128;
                             corrected_ties += hand.corrected_ties;
-                            total += hand.total;
+                            total += hand.total as u128;
                         } else {
                             hand.equity = 0.0;
                         }
                     }
                 }
                 if counter > 0 {
+                    if total > u64::MAX as u128 {
+                        let ratio = total / u64::MAX as u128;
+                        let ratio = ratio + 1;
+                        wins /= ratio;
+                        ties /= ratio;
+                        total /= ratio;
+                        corrected_ties /= ratio as f64;
+                    }
                     let combo = UnitResults {
-                        wins,
-                        ties,
-                        total,
+                        wins: wins as u64,
+                        ties: ties as u64,
+                        total: total as u64,
                         corrected_ties,
                         equity: (wins as f64 + corrected_ties) / total as f64,
                         winrate: wins as f64 / total as f64,
                         tierate: ties as f64 / total as f64,
-                        weight: (weight/batch_size) as u32,
+                        weight: weight/batch_size as u32,
                         rank: u8::MAX,
                         draw: 0,
                         valid: true
@@ -367,15 +375,17 @@ impl SimulationResults {
     }
     fn generate_board_data(&mut self) {
         let n_players = self.equities.len();
+        let mut big_rank_data = vec![BigUnitResults::default();9*n_players];
+        let mut big_draw_data = vec![BigUnitResults::default();9*n_players];
         for i in 0..n_players {
             for j in 0..1326 {
                 let hand = &self.hand_results[i*1326+j];
                 if hand.valid {
                     let rank = hand.rank;
-                    let rank_data = &mut self.board_results[i*9+rank as usize];
-                    rank_data.wins += hand.wins;
-                    rank_data.ties += hand.ties;
-                    rank_data.total += hand.total;
+                    let rank_data = &mut big_rank_data[i*9+rank as usize];
+                    rank_data.wins += hand.wins as u128;
+                    rank_data.ties += hand.ties as u128;
+                    rank_data.total += hand.total as u128;
                     rank_data.corrected_ties += hand.corrected_ties;
                     rank_data.weight += hand.weight;
                     let draw = hand.draw;
@@ -383,14 +393,14 @@ impl SimulationResults {
                     for k in 0..7 {
                         let masked_draw = draw & mask; 
                         if masked_draw != 0 {
-                            let draw_data = &mut self.board_draws[i*9+k];
-                            draw_data.wins += hand.wins;
-                            draw_data.ties += hand.ties;
-                            draw_data.total += hand.total;
+                            let draw_data = &mut big_draw_data[i*10+k];
+                            draw_data.wins += hand.wins as u128;
+                            draw_data.ties += hand.ties as u128;
+                            draw_data.total += hand.total as u128;
                             draw_data.corrected_ties += hand.corrected_ties;
                             draw_data.weight += hand.weight;
                         }
-                        mask <<=1;
+                        mask <<= 1;
                     }
                     let masked_draw = draw & mask;
                     if masked_draw != 0 {
@@ -407,10 +417,10 @@ impl SimulationResults {
                             draw_rank = 9; // Nut Flush
                         }
                         if draw_rank != usize::MAX {
-                            let draw_data = &mut self.board_draws[i*9+draw_rank];
-                            draw_data.wins += hand.wins;
-                            draw_data.ties += hand.ties;
-                            draw_data.total += hand.total;
+                            let draw_data = &mut big_draw_data[i*10+draw_rank];
+                            draw_data.wins += hand.wins as u128;
+                            draw_data.ties += hand.ties as u128;
+                            draw_data.total += hand.total as u128;
                             draw_data.corrected_ties += hand.corrected_ties;
                             draw_data.weight += hand.weight;
                         }
@@ -418,15 +428,37 @@ impl SimulationResults {
                 }
             }
         }
-        for rank_data in self.board_results.iter_mut() {
-            if rank_data.total > 0 {
+        for (big_rank_data, rank_data) in big_rank_data.iter().zip(self.board_results.iter_mut()) {
+            if big_rank_data.total > 0 {
+                let ratio;
+                if big_rank_data.total > u64::MAX as u128 {
+                    ratio = big_rank_data.total / u64::MAX as u128 + 1;
+                } else {
+                    ratio = 1;
+                }
+                rank_data.wins = (big_rank_data.wins/ratio) as u64;
+                rank_data.ties = (big_rank_data.ties/ratio) as u64;
+                rank_data.total = (big_rank_data.total/ratio) as u64;
+                rank_data.corrected_ties = big_rank_data.corrected_ties/ratio as f64;
+                rank_data.weight = big_rank_data.weight;
                 rank_data.equity = (rank_data.wins as f64 + rank_data.corrected_ties)/rank_data.total as f64;
                 rank_data.winrate = rank_data.wins as f64/rank_data.total as f64;
                 rank_data.tierate = rank_data.corrected_ties/rank_data.total as f64;
             }
         }
-        for draw_data in self.board_draws.iter_mut() {
-            if draw_data.total > 0 {
+        for (big_draw_data, draw_data) in big_draw_data.iter_mut().zip(self.board_draws.iter_mut()) {
+            if big_draw_data.total > 0 {
+                let ratio;
+                if big_draw_data.total > u64::MAX as u128 {
+                    ratio = big_draw_data.total / u64::MAX as u128 + 1;
+                } else {
+                    ratio = 1;
+                }
+                draw_data.wins = (big_draw_data.wins/ratio) as u64;
+                draw_data.ties = (big_draw_data.ties/ratio) as u64;
+                draw_data.total = (big_draw_data.total/ratio) as u64;
+                draw_data.corrected_ties = big_draw_data.corrected_ties/ratio as f64;
+                draw_data.weight = big_draw_data.weight;
                 draw_data.equity = (draw_data.wins as f64 + draw_data.corrected_ties)/draw_data.total as f64;
                 draw_data.winrate = draw_data.wins as f64/draw_data.total as f64;
                 draw_data.tierate = draw_data.corrected_ties/draw_data.total as f64;
@@ -529,6 +561,30 @@ impl AddAssign for UnitResults {
         self.total += other.total;
         self.corrected_ties += other.corrected_ties;
         self.equity = (self.wins as f64+self.corrected_ties)/self.total as f64;
+    }
+}
+
+/// This type can aggregate more data
+/// to avoid overflows.
+#[derive(Debug, Clone)]
+pub struct BigUnitResults {
+    pub wins: u128,
+    pub ties: u128,
+    pub total: u128,
+    pub corrected_ties: f64,
+    pub weight: u32,
+}
+
+impl Default for BigUnitResults {
+    fn default() -> Self {
+        BigUnitResults { 
+            wins: 0, 
+            ties: 0, 
+            total: 0, 
+            corrected_ties: 0., 
+            weight: 0, 
+        }
+
     }
 }
 
@@ -1095,9 +1151,10 @@ impl Simulator {
 
     fn set_ranks(&self) {
         let mut results = self.results.write().unwrap();
+        let board = Hand::from_bit_mask(self.board_mask);
+        let get_draws = board.get_mask().count_ones() < 5;
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
             for hand in &hand_range.hands{
-                let board = Hand::from_bit_mask(self.board_mask);
                 let holding = Hand::from_hole_cards(hand.0, hand.1);
                 let h = board + holding;
                 let rank = h.evaluate();
@@ -1106,7 +1163,12 @@ impl Simulator {
                     category -= 1;
                 }
                 results.hand_results[1326*i+get_card_index(hand.0, hand.1)].rank = category;
-                let draw = get_draw(holding, board, category);
+                let draw;
+                if get_draws {
+                    draw = get_draw(holding, board, category);
+                } else {
+                    draw = 0;
+                }
                 results.hand_results[1326*i+get_card_index(hand.0, hand.1)].draw = draw;
             }
         }
