@@ -376,7 +376,7 @@ impl SimulationResults {
     fn generate_board_data(&mut self) {
         let n_players = self.equities.len();
         let mut big_rank_data = vec![BigUnitResults::default();9*n_players];
-        let mut big_draw_data = vec![BigUnitResults::default();9*n_players];
+        let mut big_draw_data = vec![BigUnitResults::default();10*n_players];
         for i in 0..n_players {
             for j in 0..1326 {
                 let hand = &self.hand_results[i*1326+j];
