@@ -110,7 +110,7 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
                     draw |= 64; // Backdoor Flush Draw
                 }
             }
-            if suit_count >= 3 {
+            if suit_count == 4 || (suit_count == 3 && get_backdoors) {
                 let mask: u16 = 0b1111100000000;
                 // Only the top 5 cards matter for the Nut Flush
                 let board_mask = board.get_suit_mask(i) & mask;
