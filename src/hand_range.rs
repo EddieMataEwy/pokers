@@ -107,9 +107,28 @@ impl HandRange {
     /// let ranges = HandRange::from_strings(["22+,QQ@50".to_string(), "AKs".to_string()].to_vec());
     /// ```
     pub fn from_strings(arr: Vec<String>) -> Vec<Self> {
-        arr.iter()
+        let mut ranges: Vec<HandRange> = arr.iter()
             .map(|s| HandRange::from_string(s.to_owned()))
-            .collect()
+            .collect();
+        let mut check = true;
+        'outer: for range in &ranges {
+            let hands = &range.hands;
+            for combo in hands {
+                if combo.2 != 100 {
+                    check = false;
+                    break 'outer;
+                }
+            }
+        }
+        if check {
+            for range in ranges.iter_mut() {
+                let hands = &mut range.hands;
+                for combo in hands {
+                    combo.2 = 1;
+                }
+            }
+        }
+        ranges
     }
 
     /// remove combos that conflict with board
