@@ -41,11 +41,14 @@
 //! let rank = final_score / 4096; // or final_score >> 12
 //! ```
 
+#![feature(lazy_cell)]
+
 pub mod constants;
 pub mod hand_evaluator;
 pub mod hand_range;
 pub mod fastdivide;
 pub mod equity_calculator;
+pub mod string_lookup;
 
 pub mod lookup;
 pub mod flush_lookup;
