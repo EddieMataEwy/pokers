@@ -5,6 +5,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::fastdivide::DividerU64;
 use crate::get_draw;
+use crate::string_lookup::{HAND_TO_INDEX, COMBO_TO_INDEX};
 use std::cmp::Ordering;
 
 use std::result::Result;
@@ -306,6 +307,20 @@ impl SimulationResults {
             *e /= equity_sum;
         }
         self.equities = equity;
+    }
+    pub fn get_hand_result(&self, player: usize,  hand: String) -> Result<UnitResults, &'static str> {
+        let index = match HAND_TO_INDEX.get(hand.as_str()) {
+            Some(i) => i,
+            None => return Err("Invalid hand")
+        };
+        Ok(self.hand_results[1326*player+index].clone())
+    }
+    pub fn get_combo_result(&self, player: usize,  hand: String) -> Result<UnitResults, &'static str> {
+        let index = match COMBO_TO_INDEX.get(hand.as_str()) {
+            Some(i) => i,
+            None => return Err("Invalid combo")
+        };
+        Ok(self.combo_results[169*player+index].clone())
     }
     fn generate_final_data(&mut self){
         let n_players = self.equities.len();
@@ -1309,4 +1324,4 @@ mod tests {
         println!("{:?}", equity);
         assert_eq!(equity[0], 0.8520371330210104);
     }
-}
+o
