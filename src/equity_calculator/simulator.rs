@@ -1324,4 +1324,4 @@ mod tests {
         println!("{:?}", equity);
         assert_eq!(equity[0], 0.8520371330210104);
     }
-o
+}
