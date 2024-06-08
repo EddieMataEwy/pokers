@@ -58,3 +58,4 @@ pub mod map;
 pub use hand_range::{HandRange, get_card_mask};
 pub use equity_calculator::{exact_equity, approx_equity, SimulationResults, UnitResults, SimulatorError};
 pub use hand_evaluator::*;
+pub use string_lookup::*;
