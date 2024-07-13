@@ -1293,7 +1293,7 @@ mod tests {
     fn test_approx_weighted() {
         const ERROR: f64 = 0.01;
         const THREADS: u8 = 4;
-        let ranges = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
+        let (ranges, _) = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
         let equity = approx_equity(&ranges, 0, 0, THREADS, 0.001, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();
         let equity = equity.equities;
         println!("{:?}", equity);
@@ -1304,7 +1304,7 @@ mod tests {
     #[test]
     fn test_exact_weighted() {
         const THREADS: u8 = 8;
-        let ranges = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
+        let (ranges, _) = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
         let board_mask = get_card_mask("");
         let dead_mask = get_card_mask("");
         let equity = exact_equity(&ranges, board_mask, dead_mask, THREADS, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();
@@ -1316,7 +1316,7 @@ mod tests {
     #[test]
     fn test_preflop_accuracy() {
         const THREADS: u8 = 8;
-        let ranges = HandRange::from_strings(["AA".to_string(), "random".to_string()].to_vec());
+        let (ranges, _) = HandRange::from_strings(["AA".to_string(), "random".to_string()].to_vec());
         let board_mask = get_card_mask("");
         let dead_mask = get_card_mask("");
         let equity = exact_equity(&ranges, board_mask, dead_mask, THREADS, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();

@@ -106,7 +106,7 @@ impl HandRange {
     /// use pokers::hand_range::HandRange;
     /// let ranges = HandRange::from_strings(["22+,QQ@50".to_string(), "AKs".to_string()].to_vec());
     /// ```
-    pub fn from_strings(arr: Vec<String>) -> Vec<Self> {
+    pub fn from_strings(arr: Vec<String>) -> (Vec<Self>, bool) {
         let mut ranges: Vec<HandRange> = arr.iter()
             .map(|s| HandRange::from_string(s.to_owned()))
             .collect();
@@ -128,7 +128,7 @@ impl HandRange {
                 }
             }
         }
-        ranges
+        (ranges, check)
     }
 
     /// remove combos that conflict with board
