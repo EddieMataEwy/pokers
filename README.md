@@ -17,7 +17,7 @@ A poker library written in rust.
 Add this to your `Cargo.toml`:
 ```
 [dependencies]
-pokers = "0.5.1"
+pokers = "0.6.0"
 ```
 ## Hand Evaluator
 
@@ -35,7 +35,7 @@ println!("score: {}", score);
 
 ## Equity Calculator
 
-Calculates the range vs range equities for up to 6 different ranges specified by equilab-like range strings.
+Calculates the range vs range equities for up to 9 different ranges specified by equilab-like range strings.
 Supports monte-carlo simulations and exact equity calculations
 
 ### Usage
@@ -69,6 +69,7 @@ Differences with the original repo:
  - Uses hardcoded arrays for lookups, so no need to read and write from files, use vectors, or lazy_static. This speeds up compilation significantly.
  - Adds a cancel token to the simulator to stop it at any time from another thread.
  - Uses a callback that takes the progress of the simulation.
+ - 9 Players.
 
 ## License
 

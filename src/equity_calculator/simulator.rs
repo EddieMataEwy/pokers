@@ -23,8 +23,10 @@ use crate::hand_range::HandRange;
 // use super::combined_range::CombinedRange;
 
 const MIN_PLAYERS: usize = 2;
-const MAX_PLAYERS: usize = 6;
+const MAX_PLAYERS: usize = 9;
 const BOARD_CARDS: u32 = 5;
+const NUM_HANDS: usize = 1326;
+const NUM_COMBOS: usize = 169;
 
 #[derive(Debug, Clone)]
 pub enum SimulatorError {
@@ -105,7 +107,7 @@ pub fn exact_equity<F: Fn(u8)>(
         cancel_token,
     ));
 
-    sim.save_hand_weights();
+    let flag = sim.save_hand_weights();
 
     if board_mask.count_ones() > 2 {
         sim.set_ranks();
@@ -128,6 +130,7 @@ pub fn exact_equity<F: Fn(u8)>(
         }
     });
     // get results and calculate equity
+    sim.fix_hand_weights(flag);
     let results = Arc::try_unwrap(sim).unwrap().results;
     let mut results = results.into_inner().unwrap();
     results.get_equity();
@@ -212,7 +215,7 @@ pub fn approx_equity<F: Fn(u8)>(
         cancel_token,
     ));
     
-    sim.save_hand_weights();
+    let flag = sim.save_hand_weights();
 
     if board_mask.count_ones() > 2 {
         sim.set_ranks();
@@ -237,6 +240,7 @@ pub fn approx_equity<F: Fn(u8)>(
         }
     });
     // get results and calculate equity
+    sim.fix_hand_weights(flag);
     let results = Arc::try_unwrap(sim).unwrap().results;
     let mut results = results.into_inner().unwrap();
     results.get_equity();
@@ -289,8 +293,8 @@ impl SimulationResults {
             batch_sum: 0f64,
             batch_sum2: 0f64,
             stdev: 0f64,
-            hand_results: vec![UnitResults::default(); 1326*n_players],
-            combo_results: Vec::with_capacity(169*n_players),
+            hand_results: vec![UnitResults::default(); NUM_HANDS*n_players],
+            combo_results: Vec::with_capacity(NUM_COMBOS*n_players),
             board_results: vec![UnitResults::default(); 9*n_players],
             board_draws: vec![UnitResults::default(); 10*n_players], 
         }
@@ -313,20 +317,20 @@ impl SimulationResults {
             Some(i) => i,
             None => return Err("Invalid hand")
         };
-        Ok(self.hand_results[1326*player+index].clone())
+        Ok(self.hand_results[NUM_HANDS*player+index].clone())
     }
     pub fn get_combo_result(&self, player: usize,  hand: String) -> Result<UnitResults, &'static str> {
         let index = match COMBO_TO_INDEX.get(hand.as_str()) {
             Some(i) => i,
             None => return Err("Invalid combo")
         };
-        Ok(self.combo_results[169*player+index].clone())
+        Ok(self.combo_results[NUM_COMBOS*player+index].clone())
     }
     fn generate_final_data(&mut self){
         let n_players = self.equities.len();
         for i in 0..n_players {
             let mut j: usize = 0;
-            while j < 1326 {
+            while j < NUM_HANDS {
                 let mut counter = 0;
                 let mut weight = 0;
                 let mut wins: u128  = 0;
@@ -339,7 +343,7 @@ impl SimulationResults {
                     _ => 12
                 };
                 for k in 0..batch_size {
-                    let hand_index = i*1326+j+k;
+                    let hand_index = i*NUM_HANDS+j+k;
                     let hand = &mut self.hand_results[hand_index];
                     if hand.valid {
                         if hand.total > 0 {
@@ -393,8 +397,8 @@ impl SimulationResults {
         let mut big_rank_data = vec![BigUnitResults::default();9*n_players];
         let mut big_draw_data = vec![BigUnitResults::default();10*n_players];
         for i in 0..n_players {
-            for j in 0..1326 {
-                let hand = &self.hand_results[i*1326+j];
+            for j in 0..NUM_HANDS {
+                let hand = &self.hand_results[i*NUM_HANDS+j];
                 if hand.valid {
                     let rank = hand.rank;
                     let rank_data = &mut big_rank_data[i*9+rank as usize];
@@ -682,7 +686,7 @@ impl Simulator {
         let mut enum_pos = 0u64;
         let mut enum_end = 0u64;
         let mut stats = SimulationResultsBatch::init(self.n_players);
-        let mut hand_stats = vec![UnitResults::default(); self.n_players*1326];
+        let mut hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
         let fast_dividers: Vec<DividerU64> = self
             .combined_ranges
             .iter()
@@ -744,7 +748,7 @@ impl Simulator {
             if stats.eval_count >= 10000  {
                 self.update_results(&tx, stats, hand_stats, false);
                 stats = SimulationResultsBatch::init(self.n_players);
-                hand_stats = vec![UnitResults::default(); self.n_players*1326];
+                hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
                 if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
                     break;
                 }
@@ -765,12 +769,12 @@ impl Simulator {
         hand_stats: &mut Vec<UnitResults>,
     ) {
         let mut hands = [Hand::default(); MAX_PLAYERS];
-        let mut lookup = [0; 6];
+        let mut lookup = [0; MAX_PLAYERS];
         for i in 0..self.n_players {
             let card1 = player_hands[i].cards.0;
             let card2 = player_hands[i].cards.1;
             hands[i] = Hand::from_hole_cards(card1, card2);
-            lookup[i] = 1326*stats.player_ids[i]+get_card_index(card1, card2);
+            lookup[i] = NUM_HANDS*stats.player_ids[i]+get_card_index(card1, card2);
         }
 
         let cards_remaining = (BOARD_CARDS - board.count()) as u8;
@@ -824,7 +828,7 @@ impl Simulator {
         hands: &[Hand],
         stats: &mut SimulationResultsBatch,
         hand_stats: &mut Vec<UnitResults>,
-        lookup: &[usize;6],
+        lookup: &[usize;MAX_PLAYERS],
         board: &Hand,
         deck: &mut [u8],
         n_deck: usize,
@@ -985,7 +989,7 @@ impl Simulator {
 
     fn sim_random_walk_monte_carlo<R: Rng>(&self, rng: &mut R, tx: Sender<u8>) {
         let mut batch = SimulationResultsBatch::init(self.n_players);
-        let mut hand_stats = vec![UnitResults::default(); self.n_players*1326];
+        let mut hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
         let card_dist: Uniform<u8> = Uniform::from(0..CARD_COUNT);
         let combo_dists: Vec<Uniform<usize>> = (0..self.combined_ranges.len())
             .into_iter()
@@ -994,7 +998,7 @@ impl Simulator {
         let combined_range_dist = Uniform::from(0..self.combined_ranges.len());
         let mut used_cards_mask = 0u64;
         let mut player_hands = [Hand::default(); MAX_PLAYERS];
-        let mut lookup = [0;6];
+        let mut lookup = [0; MAX_PLAYERS];
         let mut combo_indexes = [0usize; MAX_PLAYERS];
         let mut combo_weights = [1u8; MAX_PLAYERS];
         let cards_remaining = 5 - self.fixed_board.count();
@@ -1025,7 +1029,7 @@ impl Simulator {
 
                 if (batch.eval_count & 0xfff) == 0 {
                     self.update_results(&tx, batch, hand_stats, false);
-                    hand_stats = vec![UnitResults::default(); 1326*self.n_players];
+                    hand_stats = vec![UnitResults::default(); NUM_HANDS*self.n_players];
                     batch = SimulationResultsBatch::init(self.n_players);
                     if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
                         break;
@@ -1062,7 +1066,7 @@ impl Simulator {
                 for i in 0..combined_range.player_count() {
                     let player_idx = combined_range.players()[i];
                     player_hands[player_idx] = combined_range.combos()[combo_idx].hands[i];
-                    lookup[player_idx] = 1326*player_idx+get_card_index(combined_range.combos()[combo_idx].hole_cards[i].0, combined_range.combos()[combo_idx].hole_cards[i].1);
+                    lookup[player_idx] = NUM_HANDS*player_idx+get_card_index(combined_range.combos()[combo_idx].hole_cards[i].0, combined_range.combos()[combo_idx].hole_cards[i].1);
                     combo_weights[player_idx] = combined_range.combos()[combo_idx].hole_cards[i].2;
                 }
                 combo_indexes[combined_range_idx] = combo_idx;
@@ -1077,7 +1081,7 @@ impl Simulator {
         combo_indexes: &mut [usize],
         player_hands: &mut [Hand],
         combo_weights: &mut [u8],
-        lookup: &mut [usize;6],
+        lookup: &mut [usize;MAX_PLAYERS],
         rng: &mut R,
         combo_dists: &[Uniform<usize>],
     ) -> bool {
@@ -1096,7 +1100,7 @@ impl Simulator {
                 for j in 0..self.combined_ranges[i].player_count() {
                     let player_idx = self.combined_ranges[i].players()[j];
                     player_hands[player_idx] = combo.hands[j];
-                    lookup[player_idx] = 1326*player_idx+get_card_index(combo.hole_cards[j].0, combo.hole_cards[j].1);
+                    lookup[player_idx] = NUM_HANDS*player_idx+get_card_index(combo.hole_cards[j].0, combo.hole_cards[j].1);
                     combo_weights[player_idx] = combo.hole_cards[j].2;
                 }
                 *used_cards_mask |= combo.mask;
@@ -1177,28 +1181,63 @@ impl Simulator {
                 if category > 0 {
                     category -= 1;
                 }
-                results.hand_results[1326*i+get_card_index(hand.0, hand.1)].rank = category;
+                results.hand_results[NUM_HANDS*i+get_card_index(hand.0, hand.1)].rank = category;
                 let draw;
                 if get_draws {
                     draw = get_draw(holding, board, category);
                 } else {
                     draw = 0;
                 }
-                results.hand_results[1326*i+get_card_index(hand.0, hand.1)].draw = draw;
+                results.hand_results[NUM_HANDS*i+get_card_index(hand.0, hand.1)].draw = draw;
             }
         }
     }
     
-    fn save_hand_weights(&self) {
+    fn save_hand_weights(&self) -> u16 {
         let mut results = self.results.write().unwrap();
+        let mut flag: u16 = 0;
+        let mut check: bool = true;
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
+            flag |= (1<<i);
+            check = true;
             for hand in &hand_range.hands{
-                let hand_index = 1326*i+get_card_index(hand.0, hand.1);
+                let hand_index = NUM_HANDS*i+get_card_index(hand.0, hand.1);
                 let hand_data = &mut results.hand_results[hand_index];
                 hand_data.weight = hand.2 as u32;
                 hand_data.valid = true;
+                if check && hand_data.valid && hand_data.weight != 100 {
+                    check = false;
+                    flag ^= 1<<i;
+                }
+            }
+            if check {
+                for hand in &hand_range.hands{
+                    let hand_index = NUM_HANDS*i+get_card_index(hand.0, hand.1);
+                    let hand_data = &mut results.hand_results[hand_index];
+                    if hand_data.valid {
+                        hand_data.weight = 1;
+                    }
+                }
             }
         }
+        return flag;
+    }
+    
+    fn fix_hand_weights(&self, flag: u16) {
+        let mut results = self.results.write().unwrap();
+        for (i, hand_range) in self.hand_ranges.iter().enumerate() {
+            let player_flag = flag & (1<<i) != 0;
+            if player_flag {
+                for hand in &hand_range.hands{
+                    let hand_index = NUM_HANDS*i+get_card_index(hand.0, hand.1);
+                    let hand_data = &mut results.hand_results[hand_index];
+                    if hand_data.valid {
+                        hand_data.weight = 100;
+                    }
+                }
+            }
+        }
+        return flag;
     }
 
     #[inline(always)]
@@ -1207,7 +1246,7 @@ impl Simulator {
         player_hands: &[Hand],
         weight: u64,
         board: &Hand,
-        lookup: &[usize; 6],
+        lookup: &[usize; MAX_PLAYERS],
         results: &mut SimulationResultsBatch,
         hand_results: &mut Vec<UnitResults>,
         flush_possible: bool,
@@ -1217,7 +1256,7 @@ impl Simulator {
         let mut best_score: u16 = 0;
         let mut player_mask: u8 = 1;
         let mut counter: usize = 0;
-        let mut indexes: [usize; 6] = [0, 0, 0, 0, 0, 0];
+        let mut indexes: [usize; MAX_PLAYERS] = [0; MAX_PLAYERS];
 
         for i in 0..self.n_players {
             let hand: Hand = *board + player_hands[i];
