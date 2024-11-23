@@ -4,7 +4,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 /// Max player count
-const MAX_PLAYERS: usize = 6;
+const MAX_PLAYERS: usize = 9;
 
 /// Max combined range size
 const MAX_SIZE: usize = 10000;

@@ -1196,9 +1196,9 @@ impl Simulator {
     fn save_hand_weights(&self) -> u16 {
         let mut results = self.results.write().unwrap();
         let mut flag: u16 = 0;
-        let mut check: bool = true;
+        let mut check: bool;
         for (i, hand_range) in self.hand_ranges.iter().enumerate() {
-            flag |= (1<<i);
+            flag |= 1<<i;
             check = true;
             for hand in &hand_range.hands{
                 let hand_index = NUM_HANDS*i+get_card_index(hand.0, hand.1);
@@ -1237,7 +1237,6 @@ impl Simulator {
                 }
             }
         }
-        return flag;
     }
 
     #[inline(always)]
