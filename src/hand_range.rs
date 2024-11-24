@@ -689,10 +689,10 @@ mod tests {
         assert_eq!(c.hands.len(), 4);
         // valid: hand +
         c = HandRange::from_string("a2+".to_string());
-        assert_eq!(c.hands.len(), 198);
+        assert_eq!(c.hands.len(), 192);
         // valid: hand o+
         c = HandRange::from_string("a2o+".to_string());
-        assert_eq!(c.hands.len(), 150);
+        assert_eq!(c.hands.len(), 144);
         // valid: hand s+
         c = HandRange::from_string("a2s+".to_string());
         assert_eq!(c.hands.len(), 48);

@@ -50,7 +50,7 @@ This is for instance useful to compute histograms.
 # Example
 
 ```rust
-use fastdivide::DividerU64;
+use pokers::fastdivide::DividerU64;
 
 fn histogram(vals: &[u64], min: u64, interval: u64, output: &mut [usize]) {
 

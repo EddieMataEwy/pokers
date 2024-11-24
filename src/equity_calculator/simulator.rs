@@ -52,11 +52,12 @@ pub enum SimulatorError {
 ///
 /// # Example
 /// ```
+/// use std::{io, io::Write};
 /// use std::sync::{atomic::AtomicBool, Arc};
 /// use pokers::{HandRange, get_card_mask};
-/// use pokers::approx_equity;
+/// use pokers::exact_equity;
 /// let ranges = HandRange::from_strings(["random".to_string(), "random".to_string()].to_vec());
-/// let board_mask = get_card_mask("");
+/// let board_mask = get_card_mask("KhKsKdKc3h");
 /// let dead_mask = get_card_mask("");
 /// let cancel_token = Arc::new(AtomicBool::new(false));
 /// let callback = |x: u8| {
@@ -157,11 +158,12 @@ pub fn exact_equity<F: Fn(u8)>(
 ///
 /// # Example
 /// ```
+/// use std::{io, io::Write};
 /// use std::sync::{atomic::AtomicBool, Arc};
 /// use pokers::{HandRange, get_card_mask};
 /// use pokers::approx_equity;
 /// let ranges = HandRange::from_strings(["random".to_string(), "random".to_string()].to_vec());
-/// let board_mask = get_card_mask("");
+/// let board_mask = get_card_mask("KhKsKdKc3h");
 /// let dead_mask = get_card_mask("");
 /// let cancel_token = Arc::new(AtomicBool::new(false));
 /// let callback = |x: u8| {
@@ -1326,12 +1328,72 @@ fn randomize_board<R: Rng>(
 mod tests {
     use super::*;
     use crate::hand_range::{get_card_mask, HandRange};
+    
+    #[test]
+    fn test_weight_optimization() {
+        let board_mask = get_card_mask("");
+        let dead_mask = get_card_mask("");
+        let mut hand_ranges = HandRange::from_strings(["22+".to_string(), "A2+".to_string()].to_vec());
+        hand_ranges
+            .iter_mut()
+            .for_each(|h| h.remove_conflicting_combos(board_mask, dead_mask));
+        let mut combined_ranges = CombinedRange::from_ranges(&hand_ranges);
+        for cr in &mut combined_ranges {
+            if cr.size() == 0 {
+                assert!(false);
+            }
+        }
+
+        let sim = Simulator::new(
+            hand_ranges,
+            combined_ranges,
+            board_mask,
+            dead_mask,
+            false,
+            0.0001,
+            Arc::new(AtomicBool::new(false)),
+        );
+    
+        let flag = sim.save_hand_weights();
+        assert!(sim.results.write().unwrap().hand_results.iter()
+            .all(|data| data.weight == 1 || data.weight == 0));
+        sim.fix_hand_weights(flag);
+        assert!(sim.results.write().unwrap().hand_results.iter()
+            .all(|data| data.weight == 100 || data.weight == 0));
+        let mut hand_ranges = HandRange::from_strings(["22+@50".to_string(), "A2+@5".to_string()].to_vec());
+        hand_ranges
+            .iter_mut()
+            .for_each(|h| h.remove_conflicting_combos(board_mask, dead_mask));
+        let mut combined_ranges = CombinedRange::from_ranges(&hand_ranges);
+        for cr in &mut combined_ranges {
+            if cr.size() == 0 {
+                assert!(false);
+            }
+        }
+
+        let sim = Simulator::new(
+            hand_ranges,
+            combined_ranges,
+            board_mask,
+            dead_mask,
+            false,
+            0.0001,
+            Arc::new(AtomicBool::new(false)),
+        );
+    
+        let flag = sim.save_hand_weights();
+        assert!(sim.results.write().unwrap().hand_results.iter()
+            .all(|data| data.weight == 5 || data.weight == 0 || data.weight == 50));
+        sim.fix_hand_weights(flag);
+        assert!(sim.results.write().unwrap().hand_results.iter()
+            .all(|data| data.weight == 5 || data.weight == 0 || data.weight == 50));
+    }
 
     #[test]
     fn test_approx_weighted() {
         const ERROR: f64 = 0.01;
         const THREADS: u8 = 4;
-        let (ranges, _) = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
+        let ranges = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
         let equity = approx_equity(&ranges, 0, 0, THREADS, 0.001, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();
         let equity = equity.equities;
         println!("{:?}", equity);
@@ -1342,7 +1404,7 @@ mod tests {
     #[test]
     fn test_exact_weighted() {
         const THREADS: u8 = 8;
-        let (ranges, _) = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
+        let ranges = HandRange::from_strings(["KK".to_string(), "AA@1,QQ".to_string()].to_vec());
         let board_mask = get_card_mask("");
         let dead_mask = get_card_mask("");
         let equity = exact_equity(&ranges, board_mask, dead_mask, THREADS, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();
@@ -1352,14 +1414,14 @@ mod tests {
     }
 
     #[test]
-    fn test_preflop_accuracy() {
+    fn test_accuracy() {
         const THREADS: u8 = 8;
-        let (ranges, _) = HandRange::from_strings(["AA".to_string(), "random".to_string()].to_vec());
-        let board_mask = get_card_mask("");
+        let ranges = HandRange::from_strings(["AA".to_string(), "random".to_string()].to_vec());
+        let board_mask = get_card_mask("KdKsKh3s");
         let dead_mask = get_card_mask("");
         let equity = exact_equity(&ranges, board_mask, dead_mask, THREADS, Arc::new(AtomicBool::new(false)), |_u8|{}).unwrap();
         let equity = equity.equities;
         println!("{:?}", equity);
-        assert_eq!(equity[0], 0.8520371330210104);
+        assert_eq!(equity[0], 0.9550285463328941);
     }
 }

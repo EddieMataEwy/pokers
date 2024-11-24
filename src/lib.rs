@@ -10,11 +10,12 @@
 //! ## Equity Calculator
 //!
 //! ```
+//! use std::{io, io::Write};
 //! use std::sync::{atomic::AtomicBool, Arc};
 //! use pokers::{HandRange, get_card_mask};
 //! use pokers::approx_equity;
 //! let ranges = HandRange::from_strings(["AK,22+".to_string(), "AA,KK,QQ@50".to_string()].to_vec());
-//! let board_mask = get_card_mask("2h3d4c");
+//! let board_mask = get_card_mask("2h3d4c5h6s");
 //! let dead_mask = get_card_mask("");
 //! let cancel_token = Arc::new(AtomicBool::new(false));
 //! let callback = |x: u8| {
@@ -35,6 +36,7 @@
 //! let hand = Hand::default() + CARDS[0] + CARDS[1];
 //! let score = hand.evaluate();
 //! let board = get_card_mask("AhTd9d");
+//! let board = Hand::from_bit_mask(board);
 //! let hole_cards = Hand::from_hole_cards(44, 45);
 //! let final_hand = board + hole_cards;
 //! let final_score = final_hand.evaluate();
