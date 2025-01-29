@@ -11,9 +11,9 @@ use std::cmp::Ordering;
 use std::result::Result;
 use std::sync::{Arc, Mutex, RwLock};
 
-use rand::distributions::{Distribution, Uniform};
+use rand::distr::{Distribution, Uniform};
 use rand::rngs::SmallRng;
-use rand::{thread_rng, Rng, SeedableRng};
+use rand::{rng, Rng, SeedableRng};
 
 use super::CombinedRange;
 use crate::constants::{CARD_COUNT, SUIT_COUNT, HAND_CATEGORY_OFFSET};
@@ -194,7 +194,7 @@ pub fn approx_equity<F: Fn(u8)>(
         return Err(SimulatorError::TooManyDeadCards);
     }
     
-    let mut rng = thread_rng();
+    let mut rng = rng();
     let mut hand_ranges = hand_ranges.to_owned();
     hand_ranges
         .iter_mut()
@@ -230,7 +230,7 @@ pub fn approx_equity<F: Fn(u8)>(
         for _ in 0..n_threads {
             let tx = tx.clone();
             let sim = Arc::clone(&sim);
-            let mut rng = SmallRng::from_rng(&mut rng).unwrap();
+            let mut rng = SmallRng::from_rng(&mut rng);
             scope.spawn(move || {
                 sim.sim_random_walk_monte_carlo(&mut rng, tx);
             });
@@ -992,12 +992,12 @@ impl Simulator {
     fn sim_random_walk_monte_carlo<R: Rng>(&self, rng: &mut R, tx: Sender<u8>) {
         let mut batch = SimulationResultsBatch::init(self.n_players);
         let mut hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
-        let card_dist: Uniform<u8> = Uniform::from(0..CARD_COUNT);
+        let card_dist: Uniform<u8> = Uniform::try_from(0..CARD_COUNT).unwrap();
         let combo_dists: Vec<Uniform<usize>> = (0..self.combined_ranges.len())
             .into_iter()
-            .map(|i| Uniform::from(0..self.combined_ranges[i].size()))
+            .map(|i| Uniform::try_from(0..self.combined_ranges[i].size()).unwrap())
             .collect();
-        let combined_range_dist = Uniform::from(0..self.combined_ranges.len());
+        let combined_range_dist = Uniform::try_from(0..self.combined_ranges.len()).unwrap();
         let mut used_cards_mask = 0u64;
         let mut player_hands = [Hand::default(); MAX_PLAYERS];
         let mut lookup = [0; MAX_PLAYERS];

@@ -10,4 +10,4 @@ license = "MIT"
 keywords = ["poker", "holdem"]
 
 [dependencies]
-rand = { version = "0.7", features = ["small_rng"] }
+rand = { version = "0.9" }
