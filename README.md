@@ -17,7 +17,7 @@ A poker library written in rust.
 Add this to your `Cargo.toml`:
 ```
 [dependencies]
-pokers = "0.7.0"
+pokers = "0.7.1"
 ```
 ## Hand Evaluator
 
