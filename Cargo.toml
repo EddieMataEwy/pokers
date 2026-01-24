@@ -1,6 +1,6 @@
 [package]
 name = "pokers"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 authors = ["EddieMataEwy <eddiemataewy@gmail.com>"]
 documentation = "https://docs.rs/pokers"

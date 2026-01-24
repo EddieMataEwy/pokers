@@ -9,14 +9,18 @@ use crate::hash_offsets::PERF_HASH_OFFSETS;
 use crate::hand_evaluator::CARDS;
 
 /// Return hole cards id
+/// Return usize::MAX if card are invalid
 #[inline(always)]
 pub fn get_card_index(card1: u8, card2: u8) -> usize {
-    let mut card1 = card1;
-    let mut card2 = card2;
+    let mut card1 = card1 as usize;
+    let mut card2 = card2 as usize;
     if card1 > card2 {
         std::mem::swap(&mut card1, &mut card2);
     }
-    let index = card1 as usize * (101 - card1 as usize) / 2 + card2 as usize - 1;
+    if card1 == card2 || card2 > 51  {
+        return usize::MAX;
+    }
+    let index = card1 * (101 - card1) / 2 + card2 - 1;
     unsafe {*CARD_MAP.get_unchecked(index) as usize}
 }
 
