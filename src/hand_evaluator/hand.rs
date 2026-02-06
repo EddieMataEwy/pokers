@@ -161,8 +161,8 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
 /// Bits 64-128: Bit mask for all cards (suits in 16 bit groups)
 #[derive(Debug, Copy, Clone)]
 pub struct Hand {
-    pub key: u64,
-    pub mask: u64,
+    pub(crate) key: u64,
+    pub(crate) mask: u64,
 }
 
 impl Hand {
