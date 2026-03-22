@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use rand::distr::{Distribution, Uniform};
 use rand::rngs::SmallRng;
-use rand::{rng, Rng, SeedableRng};
+use rand::{rng, RngExt};
 
 use super::CombinedRange;
 use crate::constants::{CARD_COUNT, SUIT_COUNT, HAND_CATEGORY_OFFSET};
@@ -230,7 +230,7 @@ pub fn approx_equity<F: Fn(u8)>(
         for _ in 0..n_threads {
             let tx = tx.clone();
             let sim = Arc::clone(&sim);
-            let mut rng = SmallRng::from_rng(&mut rng);
+            let mut rng: SmallRng = rand::make_rng();
             scope.spawn(move || {
                 sim.sim_random_walk_monte_carlo(&mut rng, tx);
             });
@@ -989,7 +989,7 @@ impl Simulator {
         postflop_combos
     }
 
-    fn sim_random_walk_monte_carlo<R: Rng>(&self, rng: &mut R, tx: Sender<u8>) {
+    fn sim_random_walk_monte_carlo<R: RngExt>(&self, rng: &mut R, tx: Sender<u8>) {
         let mut batch = SimulationResultsBatch::init(self.n_players);
         let mut hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
         let card_dist: Uniform<u8> = Uniform::try_from(0..CARD_COUNT).unwrap();
@@ -1077,7 +1077,7 @@ impl Simulator {
         self.update_results(&tx, batch, hand_stats, true);
     }
 
-    fn randomize_hole_cards<R: Rng>(
+    fn randomize_hole_cards<R: RngExt>(
         &self,
         used_cards_mask: &mut u64,
         combo_indexes: &mut [usize],
@@ -1301,7 +1301,7 @@ impl Simulator {
     }
 }
 
-fn randomize_board<R: Rng>(
+fn randomize_board<R: RngExt>(
     rng: &mut R,
     board: &mut Hand,
     mut used_cards_mask: u64,
