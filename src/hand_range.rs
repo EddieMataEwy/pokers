@@ -24,7 +24,7 @@ impl fmt::Display for Combo {
     /// # Example
     /// ```
     /// // prints '2s2h'
-    /// use pokers::hand_range::Combo;
+    /// use pokers::Combo;
     /// let hand = Combo(0, 1, 100);
     /// println!("{}", hand.to_string());
     /// ```
@@ -103,7 +103,7 @@ impl HandRange {
     /// # Example
     ///
     /// ```
-    /// use pokers::hand_range::HandRange;
+    /// use pokers::HandRange;
     /// let ranges = HandRange::from_strings(["22+,QQ@50".to_string(), "AKs".to_string()].to_vec());
     /// ```
     pub fn from_strings(arr: Vec<String>) -> Vec<Self> {
@@ -128,7 +128,7 @@ impl HandRange {
     /// # Example
     ///
     /// ```
-    /// use pokers::hand_range::HandRange;
+    /// use pokers::HandRange;
     /// let range = HandRange::from_string("JJ+".to_string());
     /// ```
     pub fn from_string(text: String) -> Self {
@@ -454,7 +454,7 @@ pub fn flop_from_str(s: &str) -> Result<[u8; 3], String> {
 }
 
 #[inline]
-pub fn card_from_chars<T: Iterator<Item = char>>(chars: &mut T) -> Result<u8, String> {
+fn card_from_chars<T: Iterator<Item = char>>(chars: &mut T) -> Result<u8, String> {
     let rank_char = chars.next().ok_or_else(|| "Unexpected end".to_string())?.to_ascii_lowercase();
     let suit_char = chars.next().ok_or_else(|| "Unexpected end".to_string())?;
 
@@ -495,7 +495,7 @@ pub fn hole_to_string(hole: (u8, u8)) -> Result<String, String> {
 /// # Example
 ///
 /// ```
-/// use pokers::hand_range::char_to_rank;
+/// use pokers::char_to_rank;
 /// let rank = char_to_rank('a');
 /// ```
 pub fn char_to_rank(c: char) -> u8 {
@@ -522,7 +522,7 @@ pub fn char_to_rank(c: char) -> u8 {
 /// # Example
 ///
 /// ```
-/// use pokers::hand_range::char_to_suit;
+/// use pokers::char_to_suit;
 /// let rank = char_to_suit('s');
 /// ```
 pub fn char_to_suit(c: char) -> u8 {
@@ -544,7 +544,7 @@ pub fn char_to_suit(c: char) -> u8 {
 /// # Example
 ///
 /// ```
-/// use pokers::hand_range::get_card_mask;
+/// use pokers::get_card_mask;
 /// let card_mask = get_card_mask("As2hQd");
 /// ```
 pub fn get_card_mask(text: &str) -> u64 {

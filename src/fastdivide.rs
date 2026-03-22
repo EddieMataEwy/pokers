@@ -21,7 +21,7 @@
 //     misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 
-/*!
+/*
 # Yes, but what is it really ?
 
 Division is a very costly operation for your CPU (probably between 10
@@ -50,7 +50,7 @@ This is for instance useful to compute histograms.
 # Example
 
 ```rust
-use pokers::fastdivide::DividerU64;
+use crate::fastdivide::DividerU64;
 
 fn histogram(vals: &[u64], min: u64, interval: u64, output: &mut [usize]) {
 

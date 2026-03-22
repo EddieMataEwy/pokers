@@ -12,10 +12,10 @@ pub const RANK_TO_CHAR: &[char; 13] = &[
 ];
 
 /// char to u8 suit table
-pub static SUIT_TO_CHAR: &[char; 4] = &['s', 'h', 'c', 'd'];
+pub const SUIT_TO_CHAR: &[char; 4] = &['s', 'h', 'c', 'd'];
 
-pub static SUIT_MASK: u8 = 0x3;
-pub static RANK_MASK: u8 = 0x3c;
+pub const SUIT_MASK: u8 = 0x3;
+pub const RANK_MASK: u8 = 0x3c;
 
 /// Tables of unique primes for hashing hands
 pub const RANKS: &[u64; 13] = &[

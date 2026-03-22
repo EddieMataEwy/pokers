@@ -43,19 +43,16 @@
 //! let rank = final_score / 4096; // or final_score >> 12
 //! ```
 
-pub mod constants;
-pub mod hand_evaluator;
-pub mod hand_range;
-pub mod fastdivide;
-pub mod equity_calculator;
-pub mod string_lookup;
+mod fastdivide;
+mod constants;
+mod hand_range;
+mod hand_evaluator;
+mod equity_calculator;
+mod string_lookups;
+mod lookups;
 
-pub mod lookup;
-pub mod flush_lookup;
-pub mod hash_offsets;
-pub mod map;
-
-pub use hand_range::{HandRange, get_card_mask};
 pub use equity_calculator::{exact_equity, approx_equity, SimulationResults, UnitResults, SimulatorError};
 pub use hand_evaluator::*;
-pub use string_lookup::*;
+pub use string_lookups::*;
+pub use hand_range::*;
+pub use constants::*;

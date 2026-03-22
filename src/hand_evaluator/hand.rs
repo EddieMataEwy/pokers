@@ -2,11 +2,9 @@ use std::ops::Add;
 use std::ops::AddAssign;
 
 use crate::constants::*;
-use crate::map::{CARD_MAP, MASK_MAP};
-use crate::lookup::LOOKUP;
-use crate::flush_lookup::LOOKUP_FLUSH;
-use crate::hash_offsets::PERF_HASH_OFFSETS;
-use crate::hand_evaluator::CARDS;
+use crate::lookups::*;
+use super::CARDS;
+use super::Hand;
 
 /// Return hole cards id
 /// Return usize::MAX if card are invalid
@@ -153,17 +151,6 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
     draw
 }
 
-/// 64 bit representation of poker hand for use in evaluator
-///
-/// Bits 0-31: key to non flush lookup table
-/// Bits 32-35: card counter
-/// Bits 48-63: suit counter
-/// Bits 64-128: Bit mask for all cards (suits in 16 bit groups)
-#[derive(Debug, Copy, Clone)]
-pub struct Hand {
-    pub(crate) key: u64,
-    pub(crate) mask: u64,
-}
 
 impl Hand {
     /// Create hand from hole cards

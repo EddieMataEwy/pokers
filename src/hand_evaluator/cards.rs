@@ -1,4 +1,4 @@
-use crate::hand_evaluator::hand::Hand;
+use super::Hand;
 use crate::constants::*;
 
 pub static CARDS: [Hand; 52] = [

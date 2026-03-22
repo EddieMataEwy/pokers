@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::fastdivide::DividerU64;
 use crate::get_draw;
-use crate::string_lookup::{HAND_TO_INDEX, COMBO_TO_INDEX};
+use crate::string_lookups::{HAND_TO_INDEX, COMBO_TO_INDEX};
 use std::cmp::Ordering;
 
 use std::result::Result;
@@ -15,10 +15,10 @@ use rand::distr::{Distribution, Uniform};
 use rand::rngs::SmallRng;
 use rand::{rng, RngExt};
 
-use super::CombinedRange;
-use crate::constants::{CARD_COUNT, SUIT_COUNT, HAND_CATEGORY_OFFSET};
+use super::combined_range::CombinedRange;
+use crate::constants::{CARD_COUNT, HAND_CATEGORY_SHIFT, SUIT_COUNT};
 use crate::hand_evaluator::{get_card_index, Hand, CARDS};
-use crate::hand_range::HandRange;
+use crate::HandRange;
 
 // use super::combined_range::CombinedRange;
 
@@ -1179,7 +1179,7 @@ impl Simulator {
                 let holding = Hand::from_hole_cards(hand.0, hand.1);
                 let h = board + holding;
                 let rank = h.evaluate();
-                let mut category: u8 = (rank/HAND_CATEGORY_OFFSET) as u8;
+                let mut category: u8 = (rank >> HAND_CATEGORY_SHIFT) as u8;
                 if category > 0 {
                     category -= 1;
                 }
