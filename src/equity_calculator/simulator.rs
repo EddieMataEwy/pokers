@@ -1,5 +1,5 @@
 use std::ops::AddAssign;
-use std::sync::mpsc::{channel, Sender};
+#[cfg(not(feature = "web"))]
 use std::thread;
 use std::sync::atomic::AtomicBool;
 
@@ -66,7 +66,7 @@ pub enum SimulatorError {
 /// };
 /// let equities = exact_equity(&ranges, board_mask, dead_mask, 4, cancel_token, callback).unwrap();
 /// ```
-pub fn exact_equity<F: Fn(u8)>(
+pub fn exact_equity<F: Fn(u8) + Send + Sync>(
     hand_ranges: &[HandRange],
     board_mask: u64,
     dead_mask: u64,
@@ -114,22 +114,26 @@ pub fn exact_equity<F: Fn(u8)>(
         sim.set_ranks();
     }
 
-    let (tx, rx) = channel();
+    let callback = Arc::new(callback);
 
     // spawn threads
+    #[cfg(not(feature = "web"))]
     thread::scope(|scope| {
         for _ in 0..n_threads {
-            let tx = tx.clone();
             let sim = Arc::clone(&sim);
+            let callback = Arc::clone(&callback);
             scope.spawn(move || {
-                sim.enumerate_all(tx);
+                sim.enumerate_all(callback);
             });
         }
-        drop(tx);
-        for msg in rx.iter() {
-            callback(msg);
-        }
     });
+    
+    #[cfg(feature = "web")]
+    {
+        let _ = n_threads;
+        sim.enumerate_all(callback);
+    }
+    
     // get results and calculate equity
     sim.fix_hand_weights(flag);
     let results = Arc::try_unwrap(sim).unwrap().results;
@@ -172,7 +176,7 @@ pub fn exact_equity<F: Fn(u8)>(
 /// };
 /// let equities = approx_equity(&ranges, board_mask, dead_mask, 4, 0.001, cancel_token, callback).unwrap();
 /// ```
-pub fn approx_equity<F: Fn(u8)>(
+pub fn approx_equity<F: Fn(u8) + Send + Sync>(
     hand_ranges: &[HandRange],
     board_mask: u64,
     dead_mask: u64,
@@ -223,24 +227,27 @@ pub fn approx_equity<F: Fn(u8)>(
         sim.set_ranks();
     }
 
-    let (tx, rx) = channel();
+    let callback = Arc::new(callback);
     
     // spawn threads
+    #[cfg(not(feature = "web"))]
     thread::scope(|scope| {
         for _ in 0..n_threads {
-            let tx = tx.clone();
             let sim = Arc::clone(&sim);
+            let callback = Arc::clone(&callback);
             let mut rng: SmallRng = rand::make_rng();
             scope.spawn(move || {
-                sim.sim_random_walk_monte_carlo(&mut rng, tx);
+                sim.sim_random_walk_monte_carlo(&mut rng, callback);
             });
         }
-
-        drop(tx);
-        for msg in rx.iter() {
-            callback(msg);
-        }
     });
+    
+    #[cfg(feature = "web")]
+    {
+        let _ = n_threads;
+        let mut rng: SmallRng = rand::make_rng();
+        sim.sim_random_walk_monte_carlo(&mut rng, callback);
+    }    
     // get results and calculate equity
     sim.fix_hand_weights(flag);
     let results = Arc::try_unwrap(sim).unwrap().results;
@@ -684,7 +691,7 @@ impl Simulator {
         }
     }
 
-    fn enumerate_all(&self, tx: Sender<u8>) {
+    fn enumerate_all<F: Fn(u8) + Send + Sync>(&self, callback: Arc<F>) {
         let mut enum_pos = 0u64;
         let mut enum_end = 0u64;
         let mut stats = SimulationResultsBatch::init(self.n_players);
@@ -748,7 +755,7 @@ impl Simulator {
             }
 
             if stats.eval_count >= 10000  {
-                self.update_results(&tx, stats, hand_stats, false);
+                self.update_results(&callback, stats, hand_stats, false);
                 stats = SimulationResultsBatch::init(self.n_players);
                 hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
                 if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
@@ -758,7 +765,7 @@ impl Simulator {
             enum_pos += 1;
         }
 
-        self.update_results(&tx, stats, hand_stats, true);
+        self.update_results(&callback, stats, hand_stats, true);
     }
 
     fn enumerate_board(
@@ -989,7 +996,11 @@ impl Simulator {
         postflop_combos
     }
 
-    fn sim_random_walk_monte_carlo<R: RngExt>(&self, rng: &mut R, tx: Sender<u8>) {
+    fn sim_random_walk_monte_carlo<R,F>(&self, rng: &mut R, callback: Arc<F>)
+    where
+        R: RngExt,
+        F: Fn(u8) + Send + Sync,
+    {
         let mut batch = SimulationResultsBatch::init(self.n_players);
         let mut hand_stats = vec![UnitResults::default(); self.n_players*NUM_HANDS];
         let card_dist: Uniform<u8> = Uniform::try_from(0..CARD_COUNT).unwrap();
@@ -1030,7 +1041,7 @@ impl Simulator {
                 self.evaluate_hands(&player_hands, weight, &board, &lookup, &mut batch, &mut hand_stats, true);
 
                 if (batch.eval_count & 0xfff) == 0 {
-                    self.update_results(&tx, batch, hand_stats, false);
+                    self.update_results(&callback, batch, hand_stats, false);
                     hand_stats = vec![UnitResults::default(); NUM_HANDS*self.n_players];
                     batch = SimulationResultsBatch::init(self.n_players);
                     if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1074,7 +1085,7 @@ impl Simulator {
                 combo_indexes[combined_range_idx] = combo_idx;
             }
         }
-        self.update_results(&tx, batch, hand_stats, true);
+        self.update_results(&callback, batch, hand_stats, true);
     }
 
     fn randomize_hole_cards<R: RngExt>(
@@ -1113,8 +1124,7 @@ impl Simulator {
         }
         false
     }
-
-    fn update_results(&self, tx: &Sender<u8>, batch: SimulationResultsBatch, hand_batch: Vec<UnitResults>, finished: bool) {
+    fn update_results<F: Fn(u8) + Send + Sync>(&self, callback: &Arc<F>, batch: SimulationResultsBatch, hand_batch: Vec<UnitResults>, finished: bool) {
         // get lock
         let mut results = self.results.write().unwrap();
         let mut batch_hands = 0u64;
@@ -1158,7 +1168,7 @@ impl Simulator {
                 / results.batch_count;
 
             let progress = (1.0 / (results.stdev / self.stdev_target).powi(2) * 100.0) as u8;
-            tx.send(progress).unwrap();
+            callback(progress);
 
             // calc variance
             if !finished && results.stdev < self.stdev_target {
@@ -1166,7 +1176,7 @@ impl Simulator {
             }
         } else {
             let progress = (*self.enum_pos.lock().unwrap() as f64 / self.get_preflop_combo_count() as f64 * 100.0) as u8;
-            tx.send(progress).unwrap();
+            callback(progress);
         }
     }
 

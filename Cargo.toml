@@ -1,6 +1,6 @@
 [package]
 name = "pokers"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 authors = ["EddieMataEwy <eddiemataewy@gmail.com>"]
 documentation = "https://docs.rs/pokers"
@@ -17,3 +17,7 @@ getrandom = { version = "0.4.2", features = ["wasm_js"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 getrandom = { version = "0.4.2", features = [] }
+
+[features]
+default = []
+web = []
