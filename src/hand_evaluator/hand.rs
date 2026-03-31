@@ -154,11 +154,13 @@ pub fn get_draw(hole_cards: Hand, board: Hand, rank: u8) -> u8 {
 
 impl Hand {
     /// Create hand from hole cards
+    #[inline(always)]
     pub fn from_hole_cards(c1: u8, c2: u8) -> Hand {
         CARDS[usize::from(c1)] + CARDS[usize::from(c2)]
     }
 
     /// construct a Hand object from board mask
+    #[inline(always)]
     pub fn from_bit_mask(mask: u64) -> Hand {
         let mut board = Hand::default();
         for c in 0..usize::from(CARD_COUNT) {
@@ -170,6 +172,7 @@ impl Hand {
     }
 
     /// Checks if hand contains another hand
+    #[inline(always)]
     pub fn contains(&self, card: u8) -> bool {
         let mask = self.get_mask();
         let card_mask = 1u64 << ((3 - card % 4) * 16 + card / 4);
@@ -186,7 +189,8 @@ impl Hand {
     pub const fn get_mask(self) -> u64 {
         self.mask
     }
-    /// Returns 16 bit rank mask, ignoring suits
+    /// Returns 16 bit rank mask 
+    #[inline(always)]
     pub fn get_suit_mask(&self, suit: u8) -> u16 {
         let hand_mask = self.get_mask();
         let mut rank_mask = 0u64;
@@ -194,6 +198,7 @@ impl Hand {
         rank_mask as u16
     }
     /// Returns 16 bit rank mask, ignoring suits
+    #[inline(always)]
     pub fn get_rank_mask(&self) -> u16 {
         let hand_mask = self.get_mask();
         let mut rank_mask = 0u64;
@@ -222,15 +227,15 @@ impl Hand {
     pub fn get_flush_key(self) -> usize {
         // if hand has flush, return key
         // check to prevent throwing overflow error
-        if self.has_flush() {
+        if !self.has_flush() {
+            0
+        } else {
             // find which suit has flush
             let flush_check_bits = self.get_counters() & FLUSH_CHECK_MASK32;
             let shift = flush_check_bits.leading_zeros() << 2;
             // return mask for suit
             let key = (self.mask >> shift) as u16;
             usize::from(key)
-        } else {
-            0
         }
     }
     #[inline(always)]
@@ -264,7 +269,8 @@ impl Hand {
     /// Returns hand strength in 16-bit integer.
     #[inline(always)]
     pub fn evaluate(&self) -> u16 {
-        if self.has_flush() {
+        let flush_key = self.get_flush_key();
+        if flush_key != 0 {
             unsafe { *LOOKUP_FLUSH.get_unchecked(self.get_flush_key()) }
         } else {
             let rank_key = self.get_rank_key();

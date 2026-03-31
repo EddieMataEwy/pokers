@@ -767,7 +767,7 @@ impl Simulator {
 
         self.update_results(&callback, stats, hand_stats, true);
     }
-
+    
     fn enumerate_board(
         &self,
         player_hands: &[HandWithIndex],
@@ -788,7 +788,7 @@ impl Simulator {
 
         let cards_remaining = (BOARD_CARDS - board.count()) as u8;
         if cards_remaining == 0 {
-            self.evaluate_hands(&hands, weight, board, &lookup, stats, hand_stats, true);
+            self.evaluate_hands::<true>(&hands, weight, board, &lookup, stats, hand_stats);
             return;
         }
 
@@ -862,7 +862,7 @@ impl Simulator {
                         multiplier += 1;
                         i += 1;
                     }
-                    self.evaluate_hands(hands, weight * multiplier, &new_board, lookup, stats, hand_stats, false);
+                    self.evaluate_hands::<false>(hands, weight * multiplier, &new_board, lookup, stats, hand_stats);
                 }
             } else {
                 let mut last_rank = u8::MAX;
@@ -884,7 +884,7 @@ impl Simulator {
                         last_rank = rank;
                     }
                     let new_board = *board + CARDS[usize::from(deck[i])];
-                    self.evaluate_hands(hands, weight * multiplier, &new_board, lookup, stats, hand_stats, true);
+                    self.evaluate_hands::<true>(hands, weight * multiplier, &new_board, lookup, stats, hand_stats);
                 }
             }
             return;
@@ -921,7 +921,7 @@ impl Simulator {
                     let new_weight = BINOM_COEFF[irrelevant_count][repeats] * weight;
                     new_board += CARDS[usize::from(deck[i + repeats - 1])];
                     if repeats == usize::from(cards_remaining) {
-                        self.evaluate_hands(&hands, new_weight, &new_board, lookup, stats, hand_stats, true);
+                        self.evaluate_hands::<true>(&hands, new_weight, &new_board, lookup, stats, hand_stats);
                     } else {
                         self.enumerate_board_rec(
                             hands,
@@ -1038,7 +1038,7 @@ impl Simulator {
                     cards_remaining,
                     &card_dist,
                 );
-                self.evaluate_hands(&player_hands, weight, &board, &lookup, &mut batch, &mut hand_stats, true);
+                self.evaluate_hands::<true>(&player_hands, weight, &board, &lookup, &mut batch, &mut hand_stats);
 
                 if (batch.eval_count & 0xfff) == 0 {
                     self.update_results(&callback, batch, hand_stats, false);
@@ -1252,7 +1252,7 @@ impl Simulator {
     }
 
     #[inline(always)]
-    fn evaluate_hands(
+    fn evaluate_hands<const FLUSH_POSSIBLE: bool>(
         &self,
         player_hands: &[Hand],
         weight: u64,
@@ -1260,7 +1260,6 @@ impl Simulator {
         lookup: &[usize; MAX_PLAYERS],
         results: &mut SimulationResultsBatch,
         hand_results: &mut Vec<UnitResults>,
-        flush_possible: bool,
     ) {
         // evaulate hands
         let mut winner_mask: u8 = 0;
@@ -1271,7 +1270,7 @@ impl Simulator {
 
         for i in 0..self.n_players {
             let hand: Hand = *board + player_hands[i];
-            let score = if flush_possible {
+            let score = if FLUSH_POSSIBLE {
                 hand.evaluate()
             } else {
                 hand.evaluate_without_flush()
